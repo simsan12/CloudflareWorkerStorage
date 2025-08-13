@@ -1,0 +1,18 @@
+# Cloudflare Pages 配置文件
+
+[build]
+command = "echo 'No build needed'"
+publish = "pages"
+
+[build.environment]
+NODE_VERSION = "18"
+
+[[redirects]]
+from = "/api/*"
+to = "/api/:splat"
+status = 200
+
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200

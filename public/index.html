@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件管理器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .file-list {
+            border: 1px solid #ddd;
+            padding: 10px;
+        }
+        .file-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .file-item:last-child {
+            border-bottom: none;
+        }
+        .file-info {
+            flex-grow: 1;
+        }
+        .file-actions {
+            margin-left: 10px;
+        }
+        button {
+            padding: 5px 10px;
+            margin: 0 5px;
+            cursor: pointer;
+        }
+        .delete-btn {
+            background-color: #ff4444;
+            color: white;
+            border: none;
+        }
+        .download-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+        }
+        #progress {
+            margin-top: 10px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>文件管理器</h1>
+    
+    <div class="upload-area">
+        <h3>上传文件</h3>
+        <input type="file" id="fileInput" />
+        <button onclick="uploadFile()">上传</button>
+        <div id="progress"></div>
+    </div>
+    
+    <div class="file-list">
+        <h3>文件列表</h3>
+        <div id="fileList"></div>
+    </div>
+
+    <script>
+        // 加载文件列表
+        async function loadFiles() {
+            try {
+                const response = await fetch('/api/files');
+                const data = await response.json();
+                
+                const fileList = document.getElementById('fileList');
+                fileList.innerHTML = '';
+                
+                if (data.files && data.files.length > 0) {
+                    data.files.forEach(file => {
+                        const fileItem = document.createElement('div');
+                        fileItem.className = 'file-item';
+                        fileItem.innerHTML = `
+                            <div class="file-info">
+                                <strong>${file.name}</strong><br>
+                                <small>大小: ${formatFileSize(file.size)} | 上传时间: ${new Date(file.uploadTime).toLocaleString()}</small>
+                            </div>
+                            <div class="file-actions">
+                                <button class="download-btn" onclick="downloadFile('${file.id}', '${file.name}')">下载</button>
+                                <button class="delete-btn" onclick="deleteFile('${file.id}')">删除</button>
+                            </div>
+                        `;
+                        fileList.appendChild(fileItem);
+                    });
+                } else {
+                    fileList.innerHTML = '<p>暂无文件</p>';
+                }
+            } catch (error) {
+                console.error('加载文件列表失败:', error);
+            }
+        }
+
+        // 上传文件
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('请选择文件');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const progress = document.getElementById('progress');
+            progress.style.display = 'block';
+            progress.innerHTML = '上传中...';
+
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    progress.innerHTML = '上传成功！';
+                    fileInput.value = '';
+                    loadFiles();
+                } else {
+                    progress.innerHTML = '上传失败: ' + result.error;
+                }
+            } catch (error) {
+                console.error('上传失败:', error);
+                progress.innerHTML = '上传失败: ' + error.message;
+            }
+        }
+
+        // 下载文件
+        function downloadFile(fileId, fileName) {
+            const link = document.createElement('a');
+            link.href = `/api/download/${fileId}`;
+            link.download = fileName;
+            link.click();
+        }
+
+        // 删除文件
+        async function deleteFile(fileId) {
+            if (!confirm('确定要删除这个文件吗？')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/files/${fileId}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    loadFiles();
+                } else {
+                    alert('删除失败: ' + result.error);
+                }
+            } catch (error) {
+                console.error('删除失败:', error);
+                alert('删除失败: ' + error.message);
+            }
+        }
+
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 页面加载时初始化
+        window.onload = loadFiles;
+    </script>
+</body>
+</html>
