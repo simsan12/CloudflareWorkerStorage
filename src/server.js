@@ -16,6 +16,40 @@ async function ensureDirectories() {
   await fsExtra.ensureDir('pages/chunks');
 }
 
+// 读取文件索引
+async function readFileIndex() {
+  const indexPath = path.join('pages', 'files-index.json');
+  if (await fsExtra.pathExists(indexPath)) {
+    return await fsExtra.readJSON(indexPath);
+  }
+  return { files: [] };
+}
+
+// 更新文件索引
+async function updateFileIndex(fileInfo) {
+  const indexPath = path.join('pages', 'files-index.json');
+  const index = await readFileIndex();
+  
+  // 添加或更新文件信息
+  const existingIndex = index.files.findIndex(f => f.id === fileInfo.id);
+  if (existingIndex >= 0) {
+    index.files[existingIndex] = fileInfo;
+  } else {
+    index.files.push(fileInfo);
+  }
+  
+  await fsExtra.writeJSON(indexPath, index);
+}
+
+// 从文件索引中删除文件
+async function removeFileFromFileIndex(fileId) {
+  const indexPath = path.join('pages', 'files-index.json');
+  const index = await readFileIndex();
+  
+  index.files = index.files.filter(f => f.id !== fileId);
+  await fsExtra.writeJSON(indexPath, index);
+}
+
 // 启动时创建目录
 ensureDirectories().catch(console.error);
 
@@ -102,6 +136,9 @@ async function chunkFile(filePath, fileId) {
   
   const chunks = [];
   
+  // 确保chunks目录存在
+  await fsExtra.ensureDir('chunks');
+  
   for (let i = 0; i < chunkCount; i++) {
     const start = i * CHUNK_SIZE;
     const end = Math.min(start + CHUNK_SIZE, fileSize);
@@ -142,7 +179,7 @@ async function chunkFile(filePath, fileId) {
 }
 
 // 生成文件元数据
-async function generateFileMetadata(originalPath, fileId, fileName, chunks, originalHash) {
+async function generateFileMetadata(originalPath, fileId, fileName, chunks) {
   const stats = await fs.promises.stat(originalPath);
   const fileHash = crypto.createHash('md5');
   
@@ -151,9 +188,6 @@ async function generateFileMetadata(originalPath, fileId, fileName, chunks, orig
   fileHash.update(fileBuffer);
   const calculatedHash = fileHash.digest('hex');
   
-  // 验证哈希是否匹配
-  const hashVerified = originalHash ? calculatedHash === originalHash : true;
-  
   return {
     id: fileId,
     name: fileName,
@@ -161,8 +195,6 @@ async function generateFileMetadata(originalPath, fileId, fileName, chunks, orig
     chunks: chunks,
     totalChunks: chunks.length,
     hash: calculatedHash,
-    originalHash: originalHash,
-    hashVerified: hashVerified,
     uploadTime: new Date().toISOString(),
     mimeType: 'application/octet-stream'
   };
@@ -182,18 +214,26 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     
     // 优先使用客户端传递的正确文件名，如果没有则使用文件的原始名
     const fileName = req.body.fileName || req.file.originalname;
-    const originalHash = req.body.originalHash || null;
     
     // 分块文件
     const { chunks, fileSize, chunkCount } = await chunkFile(originalPath, fileId);
     
     // 生成元数据
-    const metadata = await generateFileMetadata(originalPath, fileId, fileName, chunks, originalHash);
+    const metadata = await generateFileMetadata(originalPath, fileId, fileName, chunks);
     
     // 将元数据保存到pages目录
     const metadataPath = path.join('pages', 'metadata', `${fileId}.json`);
     await fsExtra.ensureDir(path.dirname(metadataPath));
     await fsExtra.writeJSON(metadataPath, metadata);
+    
+    // 更新文件索引
+    await updateFileIndex({
+      id: fileId,
+      name: fileName,
+      size: fileSize,
+      uploadTime: metadata.uploadTime,
+      mimeType: metadata.mimeType
+    });
     
     // 复制分块文件到pages目录
     for (const chunk of chunks) {
@@ -213,13 +253,24 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       fileName: fileName,
       fileSize: fileSize,
       chunkCount: chunkCount,
-      hashVerified: metadata.hashVerified,
-      hash: metadata.hash,
-      originalHash: metadata.originalHash
+      hash: metadata.hash
     });
     
   } catch (error) {
     console.error('Upload error:', error);
+    // 确保在错误时也清理临时文件
+    if (req.file && req.file.path) {
+      try {
+        await fs.promises.unlink(req.file.path);
+      } catch (e) {
+        console.error('Failed to cleanup temp file:', e);
+      }
+    }
+    try {
+      await fsExtra.remove('chunks');
+    } catch (e) {
+      console.error('Failed to cleanup chunks:', e);
+    }
     res.status(500).json({ error: 'Upload failed' });
   }
 });
@@ -272,8 +323,17 @@ app.get('/api/files/:fileId', async (req, res) => {
   }
 });
 
-// 下载文件
+// 下载文件 - 兼容两种路由格式
 app.get('/api/files/:fileId/download', async (req, res) => {
+  await handleDownload(req, res);
+});
+
+app.get('/api/download/:fileId', async (req, res) => {
+  await handleDownload(req, res);
+});
+
+// 下载文件处理函数
+async function handleDownload(req, res) {
   try {
     const metadataPath = path.join('pages', 'metadata', `${req.params.fileId}.json`);
     
@@ -293,19 +353,28 @@ app.get('/api/files/:fileId/download', async (req, res) => {
       }
     }
     
+    if (chunks.length === 0) {
+      return res.status(404).json({ error: 'No chunks found' });
+    }
+    
     // 合并所有分块
     const fileBuffer = Buffer.concat(chunks);
     
+    // 编码文件名以支持特殊字符
+    const encodedFilename = encodeURIComponent(metadata.name).replace(/['()]/g, escape).replace(/\*/g, '%2A');
+    const filenameHeader = `attachment; filename="${encodedFilename}"; filename*=UTF-8''${encodedFilename}`;
+    
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${metadata.name}"`);
+    res.setHeader('Content-Disposition', filenameHeader);
     res.setHeader('Content-Length', fileBuffer.length);
+    res.setHeader('Accept-Ranges', 'bytes');
     res.send(fileBuffer);
     
   } catch (error) {
     console.error('Download error:', error);
     res.status(500).json({ error: 'Failed to download file' });
   }
-});
+}
 
 // 删除文件
 app.delete('/api/files/:fileId', async (req, res) => {
@@ -321,6 +390,9 @@ app.delete('/api/files/:fileId', async (req, res) => {
     // 删除元数据文件
     await fsExtra.remove(metadataPath);
     
+    // 从文件索引中删除
+    await removeFileFromFileIndex(req.params.fileId);
+    
     // 删除分块文件
     for (const chunk of metadata.chunks) {
       const chunkPath = path.join('pages', 'chunks', chunk.id);
@@ -332,6 +404,11 @@ app.delete('/api/files/:fileId', async (req, res) => {
     console.error('Delete file error:', error);
     res.status(500).json({ error: 'Failed to delete file' });
   }
+});
+
+// 根路径重定向到public/index.html
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
 app.listen(PORT, () => {
