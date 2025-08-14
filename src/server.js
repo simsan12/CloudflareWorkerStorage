@@ -142,13 +142,17 @@ async function chunkFile(filePath, fileId) {
 }
 
 // 生成文件元数据
-async function generateFileMetadata(originalPath, fileId, fileName, chunks) {
+async function generateFileMetadata(originalPath, fileId, fileName, chunks, originalHash) {
   const stats = await fs.promises.stat(originalPath);
   const fileHash = crypto.createHash('md5');
   
   // 计算整个文件的MD5
   const fileBuffer = await fs.promises.readFile(originalPath);
   fileHash.update(fileBuffer);
+  const calculatedHash = fileHash.digest('hex');
+  
+  // 验证哈希是否匹配
+  const hashVerified = originalHash ? calculatedHash === originalHash : true;
   
   return {
     id: fileId,
@@ -156,7 +160,9 @@ async function generateFileMetadata(originalPath, fileId, fileName, chunks) {
     size: stats.size,
     chunks: chunks,
     totalChunks: chunks.length,
-    hash: fileHash.digest('hex'),
+    hash: calculatedHash,
+    originalHash: originalHash,
+    hashVerified: hashVerified,
     uploadTime: new Date().toISOString(),
     mimeType: 'application/octet-stream'
   };
@@ -176,12 +182,13 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     
     // 优先使用客户端传递的正确文件名，如果没有则使用文件的原始名
     const fileName = req.body.fileName || req.file.originalname;
+    const originalHash = req.body.originalHash || null;
     
     // 分块文件
     const { chunks, fileSize, chunkCount } = await chunkFile(originalPath, fileId);
     
     // 生成元数据
-    const metadata = await generateFileMetadata(originalPath, fileId, fileName, chunks);
+    const metadata = await generateFileMetadata(originalPath, fileId, fileName, chunks, originalHash);
     
     // 将元数据保存到pages目录
     const metadataPath = path.join('pages', 'metadata', `${fileId}.json`);
@@ -205,7 +212,10 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       fileId: fileId,
       fileName: fileName,
       fileSize: fileSize,
-      chunkCount: chunkCount
+      chunkCount: chunkCount,
+      hashVerified: metadata.hashVerified,
+      hash: metadata.hash,
+      originalHash: metadata.originalHash
     });
     
   } catch (error) {
@@ -259,6 +269,41 @@ app.get('/api/files/:fileId', async (req, res) => {
   } catch (error) {
     console.error('Get file info error:', error);
     res.status(500).json({ error: 'Failed to get file info' });
+  }
+});
+
+// 下载文件
+app.get('/api/files/:fileId/download', async (req, res) => {
+  try {
+    const metadataPath = path.join('pages', 'metadata', `${req.params.fileId}.json`);
+    
+    if (!await fsExtra.pathExists(metadataPath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    
+    const metadata = await fsExtra.readJSON(metadataPath);
+    
+    // 重新组装文件
+    const chunks = [];
+    for (const chunk of metadata.chunks) {
+      const chunkPath = path.join('pages', 'chunks', chunk.id);
+      if (await fsExtra.pathExists(chunkPath)) {
+        const chunkBuffer = await fs.promises.readFile(chunkPath);
+        chunks.push(chunkBuffer);
+      }
+    }
+    
+    // 合并所有分块
+    const fileBuffer = Buffer.concat(chunks);
+    
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${metadata.name}"`);
+    res.setHeader('Content-Length', fileBuffer.length);
+    res.send(fileBuffer);
+    
+  } catch (error) {
+    console.error('Download error:', error);
+    res.status(500).json({ error: 'Failed to download file' });
   }
 });
 
