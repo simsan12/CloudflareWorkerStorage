@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大文件下载器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .file-info {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-left: 4px solid #667eea;
+        }
+
+        .file-info h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .file-detail {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .file-detail:last-child {
+            border-bottom: none;
+        }
+
+        .file-detail label {
+            font-weight: 600;
+            color: #555;
+        }
+
+        .file-detail span {
+            color: #333;
+        }
+
+        .download-section {
+            margin-bottom: 30px;
+        }
+
+        .download-section h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-success {
+            background: #28a745;
+        }
+
+        .progress-container {
+            margin: 20px 0;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .progress-text {
+            text-align: center;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .chunk-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .chunk-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            transition: background 0.2s ease;
+        }
+
+        .chunk-item:last-child {
+            border-bottom: none;
+        }
+
+        .chunk-item:hover {
+            background: #f8f9fa;
+        }
+
+        .chunk-item.downloaded {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .chunk-item.downloading {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .chunk-item.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .chunk-info {
+            flex: 1;
+        }
+
+        .chunk-status {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-left: 10px;
+        }
+
+        .status-indicator.pending {
+            background: #ccc;
+        }
+
+        .status-indicator.downloading {
+            background: #ffc107;
+        }
+
+        .status-indicator.downloaded {
+            background: #28a745;
+        }
+
+        .status-indicator.error {
+            background: #dc3545;
+        }
+
+        .merge-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .merge-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .merge-status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: 500;
+        }
+
+        .merge-status.ready {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .merge-status.processing {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .merge-status.completed {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                margin: 10px;
+            }
+            
+            .header {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .btn {
+                width: 100%;
+                margin-right: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 大文件下载器</h1>
+            <p>分块下载大文件，避免内存限制问题</p>
+        </div>
+
+        <div class="content">
+            <div class="file-info">
+                <h3>📄 文件信息</h3>
+                <div class="file-detail">
+                    <label>文件名:</label>
+                    <span id="fileName">加载中...</span>
+                </div>
+                <div class="file-detail">
+                    <label>文件大小:</label>
+                    <span id="fileSize">加载中...</span>
+                </div>
+                <div class="file-detail">
+                    <label>分块数量:</label>
+                    <span id="chunkCount">加载中...</span>
+                </div>
+                <div class="file-detail">
+                    <label>下载方式:</label>
+                    <span>分块下载 + 本地合并</span>
+                </div>
+            </div>
+
+            <div class="download-section">
+                <h3>⬇️ 下载控制</h3>
+                <button id="startDownload" class="btn">开始下载所有分块</button>
+                <button id="pauseDownload" class="btn btn-secondary" disabled>暂停下载</button>
+                <button id="resumeDownload" class="btn btn-secondary" disabled>继续下载</button>
+                <button id="retryFailed" class="btn btn-secondary">重试失败分块</button>
+                
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill"></div>
+                    </div>
+                    <div id="progressText" class="progress-text">等待开始下载...</div>
+                </div>
+
+                <div id="errorMessage" class="error-message hidden"></div>
+                <div id="successMessage" class="success-message hidden"></div>
+            </div>
+
+            <div class="chunk-list" id="chunkList">
+                <!-- 分块列表将在这里动态生成 -->
+            </div>
+
+            <div class="merge-section">
+                <h3>🔗 文件合并</h3>
+                <div id="mergeStatus" class="merge-status ready">等待所有分块下载完成...</div>
+                <button id="mergeFile" class="btn btn-success" disabled>合并文件</button>
+                <div id="mergeProgress" class="progress-container hidden">
+                    <div class="progress-bar">
+                        <div id="mergeProgressFill" class="progress-fill"></div>
+                    </div>
+                    <div id="mergeProgressText" class="progress-text">合并进度: 0%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class LargeFileDownloader {
+            constructor() {
+                this.fileId = this.getFileIdFromURL();
+                // 使用当前页面的域名构建Worker URL
+                this.workerUrl = `${window.location.protocol}//${window.location.host}`;
+                this.metadata = null;
+                this.chunks = [];
+                this.downloadedChunks = new Map();
+                this.isDownloading = false;
+                this.isPaused = false;
+                this.downloadQueue = [];
+                this.activeDownloads = 0;
+                this.maxConcurrentDownloads = 3;
+                
+                this.init();
+            }
+
+            getFileIdFromURL() {
+                const params = new URLSearchParams(window.location.search);
+                return params.get('fileId');
+            }
+
+            async init() {
+                if (!this.fileId) {
+                    this.showError('缺少文件ID参数');
+                    return;
+                }
+
+                try {
+                    await this.loadMetadata();
+                    this.renderFileInfo();
+                    this.renderChunkList();
+                    this.bindEvents();
+                } catch (error) {
+                    this.showError('加载文件信息失败: ' + error.message);
+                }
+            }
+
+            async loadMetadata() {
+                const response = await fetch(`${this.workerUrl}/metadata/${this.fileId}.json`);
+                if (!response.ok) {
+                    throw new Error('文件元数据加载失败');
+                }
+                this.metadata = await response.json();
+                this.chunks = this.metadata.chunks;
+            }
+
+            renderFileInfo() {
+                document.getElementById('fileName').textContent = this.metadata.name;
+                document.getElementById('fileSize').textContent = this.formatFileSize(this.metadata.size);
+                document.getElementById('chunkCount').textContent = this.chunks.length;
+            }
+
+            renderChunkList() {
+                const chunkList = document.getElementById('chunkList');
+                chunkList.innerHTML = '';
+
+                this.chunks.forEach((chunk, index) => {
+                    const chunkItem = document.createElement('div');
+                    chunkItem.className = 'chunk-item';
+                    chunkItem.id = `chunk-${index}`;
+                    
+                    chunkItem.innerHTML = `
+                        <div class="chunk-info">
+                            <div>分块 ${index + 1} / ${this.chunks.length}</div>
+                            <div class="chunk-status">大小: ${this.formatFileSize(chunk.size)}</div>
+                        </div>
+                        <div class="status-indicator pending" id="status-${index}"></div>
+                    `;
+                    
+                    chunkList.appendChild(chunkItem);
+                });
+            }
+
+            bindEvents() {
+                document.getElementById('startDownload').addEventListener('click', () => this.startDownload());
+                document.getElementById('pauseDownload').addEventListener('click', () => this.pauseDownload());
+                document.getElementById('resumeDownload').addEventListener('click', () => this.resumeDownload());
+                document.getElementById('retryFailed').addEventListener('click', () => this.retryFailed());
+                document.getElementById('mergeFile').addEventListener('click', () => this.mergeFile());
+            }
+
+            startDownload() {
+                this.isDownloading = true;
+                this.isPaused = false;
+                this.downloadQueue = [...Array(this.chunks.length).keys()];
+                this.updateButtons();
+                this.processDownloadQueue();
+            }
+
+            pauseDownload() {
+                this.isPaused = true;
+                this.updateButtons();
+            }
+
+            resumeDownload() {
+                this.isPaused = false;
+                this.updateButtons();
+                this.processDownloadQueue();
+            }
+
+            retryFailed() {
+                const failedChunks = [];
+                this.chunks.forEach((chunk, index) => {
+                    if (!this.downloadedChunks.has(index)) {
+                        failedChunks.push(index);
+                    }
+                });
+                
+                if (failedChunks.length > 0) {
+                    this.downloadQueue = [...failedChunks];
+                    this.isDownloading = true;
+                    this.isPaused = false;
+                    this.updateButtons();
+                    this.processDownloadQueue();
+                }
+            }
+
+            async processDownloadQueue() {
+                while (this.downloadQueue.length > 0 && this.activeDownloads < this.maxConcurrentDownloads && !this.isPaused) {
+                    const chunkIndex = this.downloadQueue.shift();
+                    this.activeDownloads++;
+                    this.downloadChunk(chunkIndex);
+                }
+
+                if (this.activeDownloads === 0 && this.downloadQueue.length === 0) {
+                    this.onAllChunksDownloaded();
+                }
+            }
+
+            async downloadChunk(chunkIndex) {
+                const chunk = this.chunks[chunkIndex];
+                const chunkElement = document.getElementById(`chunk-${chunkIndex}`);
+                const statusElement = document.getElementById(`status-${chunkIndex}`);
+                
+                try {
+                    this.updateChunkStatus(chunkIndex, 'downloading');
+                    
+                    const response = await fetch(`${this.workerUrl}/chunks/${chunk.id}`);
+                    if (!response.ok) {
+                        throw new Error(`分块 ${chunkIndex + 1} 下载失败`);
+                    }
+
+                    const arrayBuffer = await response.arrayBuffer();
+                    this.downloadedChunks.set(chunkIndex, arrayBuffer);
+                    
+                    this.updateChunkStatus(chunkIndex, 'downloaded');
+                    this.updateProgress();
+                    
+                } catch (error) {
+                    console.error(`Chunk ${chunkIndex} download failed:`, error);
+                    this.updateChunkStatus(chunkIndex, 'error');
+                    this.showError(`分块 ${chunkIndex + 1} 下载失败: ${error.message}`);
+                } finally {
+                    this.activeDownloads--;
+                    if (!this.isPaused) {
+                        this.processDownloadQueue();
+                    }
+                }
+            }
+
+            updateChunkStatus(chunkIndex, status) {
+                const chunkElement = document.getElementById(`chunk-${chunkIndex}`);
+                const statusElement = document.getElementById(`status-${chunkIndex}`);
+                
+                chunkElement.className = `chunk-item ${status}`;
+                statusElement.className = `status-indicator ${status}`;
+            }
+
+            updateProgress() {
+                const downloaded = this.downloadedChunks.size;
+                const total = this.chunks.length;
+                const percentage = Math.round((downloaded / total) * 100);
+                
+                document.getElementById('progressFill').style.width = `${percentage}%`;
+                document.getElementById('progressText').textContent = 
+                    `下载进度: ${downloaded}/${total} (${percentage}%)`;
+            }
+
+            updateButtons() {
+                document.getElementById('startDownload').disabled = this.isDownloading;
+                document.getElementById('pauseDownload').disabled = !this.isDownloading || this.isPaused;
+                document.getElementById('resumeDownload').disabled = !this.isDownloading || !this.isPaused;
+            }
+
+            onAllChunksDownloaded() {
+                this.isDownloading = false;
+                this.updateButtons();
+                
+                document.getElementById('mergeStatus').textContent = '所有分块下载完成，可以开始合并文件！';
+                document.getElementById('mergeStatus').className = 'merge-status ready';
+                document.getElementById('mergeFile').disabled = false;
+                
+                this.showSuccess('所有分块下载完成！');
+            }
+
+            async mergeFile() {
+                if (this.downloadedChunks.size !== this.chunks.length) {
+                    this.showError('请确保所有分块都已下载完成');
+                    return;
+                }
+
+                document.getElementById('mergeStatus').textContent = '正在合并文件...';
+                document.getElementById('mergeStatus').className = 'merge-status processing';
+                document.getElementById('mergeFile').disabled = true;
+                document.getElementById('mergeProgress').classList.remove('hidden');
+
+                try {
+                    const totalSize = this.metadata.size;
+                    const mergedArray = new Uint8Array(totalSize);
+                    let offset = 0;
+
+                    for (let i = 0; i < this.chunks.length; i++) {
+                        const chunkData = this.downloadedChunks.get(i);
+                        const chunkArray = new Uint8Array(chunkData);
+                        mergedArray.set(chunkArray, offset);
+                        offset += chunkArray.length;
+
+                        const progress = Math.round(((i + 1) / this.chunks.length) * 100);
+                        document.getElementById('mergeProgressFill').style.width = `${progress}%`;
+                        document.getElementById('mergeProgressText').textContent = 
+                            `合并进度: ${progress}%`;
+
+                        // 让UI有机会更新
+                        await new Promise(resolve => setTimeout(resolve, 10));
+                    }
+
+                    // 创建下载链接
+                    const blob = new Blob([mergedArray], { type: 'application/octet-stream' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = this.metadata.name;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+
+                    document.getElementById('mergeStatus').textContent = '文件合并完成！';
+                    document.getElementById('mergeStatus').className = 'merge-status completed';
+                    this.showSuccess('文件下载并合并完成！');
+
+                } catch (error) {
+                    this.showError('文件合并失败: ' + error.message);
+                    document.getElementById('mergeFile').disabled = false;
+                }
+            }
+
+            formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+
+            showError(message) {
+                const errorElement = document.getElementById('errorMessage');
+                errorElement.textContent = message;
+                errorElement.classList.remove('hidden');
+                setTimeout(() => {
+                    errorElement.classList.add('hidden');
+                }, 5000);
+            }
+
+            showSuccess(message) {
+                const successElement = document.getElementById('successMessage');
+                successElement.textContent = message;
+                successElement.classList.remove('hidden');
+                setTimeout(() => {
+                    successElement.classList.add('hidden');
+                }, 5000);
+            }
+        }
+
+        // 初始化下载器
+        document.addEventListener('DOMContentLoaded', () => {
+            new LargeFileDownloader();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "name": "cloudflare-r2-file-manager-worker",
+  "version": "1.0.0",
+  "description": "Cloudflare R2 File Manager using Workers with Static Assets",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "preview": "wrangler preview",
+    "tail": "wrangler tail"
+  },
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "file-manager",
+    "r2",
+    "static-assets"
+  ],
+  "author": "Claude Code",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}

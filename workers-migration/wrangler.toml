@@ -1,0 +1,20 @@
+name = "cloudflare-r2-file-manager-worker"
+compatibility_date = "2024-01-01"
+main = "src/index.js"
+
+# Static Assets configuration
+[assets]
+directory = "./static"
+binding = "ASSETS"
+
+# Environment configuration
+[env.production]
+name = "cloudflare-r2-file-manager-worker"
+
+[env.staging]
+name = "cloudflare-r2-file-manager-worker-staging"
+
+# Build configuration
+[build]
+command = ""
+watch_dir = "src"

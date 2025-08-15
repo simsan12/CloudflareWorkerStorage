@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件管理器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .file-list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #eee;
+        }
+        .refresh-btn {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .refresh-btn:hover {
+            background-color: #1976D2;
+        }
+        .file-list {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .file-item {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+        .file-item:hover {
+            background-color: #f9f9f9;
+        }
+        .file-item:last-child {
+            border-bottom: none;
+        }
+        .file-info {
+            flex-grow: 1;
+        }
+        .file-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .file-meta {
+            color: #666;
+            font-size: 14px;
+        }
+        .file-actions {
+            margin-left: 20px;
+        }
+        .download-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .download-btn:hover {
+            background-color: #45a049;
+        }
+        .download-btn.large-file {
+            background-color: #FF9800;
+            position: relative;
+        }
+        .download-btn.large-file:hover {
+            background-color: #F57C00;
+        }
+        .download-btn.large-file::after {
+            content: "🚀";
+            margin-left: 5px;
+        }
+        .error-message {
+            color: #f44336;
+            background-color: #ffebee;
+            padding: 15px;
+            margin: 15px 0;
+            border: 1px solid #f44336;
+            border-radius: 5px;
+            display: none;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .no-files {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>文件管理器</h1>
+        
+        <div class="file-list-header">
+            <h3>文件列表</h3>
+            <button class="refresh-btn" onclick="loadFiles()">刷新列表</button>
+        </div>
+        
+        <div id="error" class="error-message"></div>
+        
+        <div class="file-list">
+            <div id="fileList"></div>
+        </div>
+    </div>
+
+    <script>
+        // 加载文件列表
+        async function loadFiles() {
+            const fileList = document.getElementById('fileList');
+            const errorDiv = document.getElementById('error');
+            
+            // 显示加载状态
+            fileList.innerHTML = '<div class="loading">正在加载文件列表...</div>';
+            errorDiv.style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/files');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                fileList.innerHTML = '';
+                
+                if (data.files && data.files.length > 0) {
+                    data.files.forEach(file => {
+                        const fileItem = document.createElement('div');
+                        fileItem.className = 'file-item';
+                        const isLargeFile = file.size > 500 * 1024 * 1024; // 500MB
+                        const downloadBtnText = isLargeFile ? '分块下载' : '下载';
+                        const downloadBtnClass = isLargeFile ? 'download-btn large-file' : 'download-btn';
+                        
+                        fileItem.innerHTML = `
+                            <div class="file-info">
+                                <div class="file-name">${file.name}</div>
+                                <div class="file-meta">
+                                    大小: ${formatFileSize(file.size)} | 
+                                    上传时间: ${new Date(file.uploadTime).toLocaleString()} | 
+                                    分块: ${file.chunks}
+                                    ${isLargeFile ? ' | <span style="color: #ff9800; font-weight: bold;">大文件</span>' : ''}
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                <button class="${downloadBtnClass}" onclick="downloadFile('${file.id}', '${file.name}', ${file.size})">${downloadBtnText}</button>
+                            </div>
+                        `;
+                        fileList.appendChild(fileItem);
+                    });
+                } else {
+                    fileList.innerHTML = '<div class="no-files">暂无文件</div>';
+                }
+            } catch (error) {
+                console.error('加载文件列表失败:', error);
+                fileList.innerHTML = '<div class="no-files">加载文件列表失败</div>';
+                errorDiv.textContent = `加载失败: ${error.message}`;
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        // 下载文件
+        function downloadFile(fileId, fileName, fileSize) {
+            const LARGE_FILE_THRESHOLD = 500 * 1024 * 1024; // 500MB
+            
+            // 检查是否为大文件
+            if (fileSize > LARGE_FILE_THRESHOLD) {
+                // 大文件：跳转到专用下载页面
+                window.location.href = `/large-file-downloader.html?fileId=${fileId}`;
+            } else {
+                // 普通文件：直接下载
+                const link = document.createElement('a');
+                link.href = `/api/download/${fileId}`;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 页面加载时初始化
+        window.onload = loadFiles;
+    </script>
+</body>
+</html>
