@@ -117,17 +117,22 @@ wrangler login
 
 ```bash
 # 克隆或下载项目代码
-git clone <repository-url>
-cd cloudflareR2
-
-# 初始化项目 (创建基础目录结构)
-node setup.js
-
+git clone https://github.com/dong-dong6/CloudflareWorkerStorage.git
+cd CloudflareWorkerStorage
 # 安装本地开发依赖 (可选，用于文件上传)
 npm install
 ```
 
-### 3. **Workers项目部署**
+### 3. **文件上传准备**
+如果需要上传新文件，使用本地开发服务器：
+```bash
+# 启动本地文件上传服务器 (端口3000)
+npm start
+```
+
+访问 `http://localhost:3000` 上传和管理文件，文件会自动分块并生成到 `workers-migration/static/` 目录。
+
+### 4. **Workers项目部署**
 
 ```bash
 # 进入 Worker 项目目录
@@ -136,32 +141,12 @@ cd workers-migration
 # 安装 Worker 依赖
 npm install
 
-# 开发模式 (本地测试)
-npm run dev
-
 # 部署到生产环境
 npm run deploy
 
 # 查看实时日志
 npm run tail
 ```
-
-### 4. **文件上传准备**
-
-如果需要上传新文件，使用本地开发服务器：
-
-```bash
-# 返回根目录
-cd ..
-
-# 启动本地文件上传服务器 (端口3000)
-npm start
-
-# 或开发模式
-npm run dev
-```
-
-访问 `http://localhost:3000` 上传和管理文件，文件会自动分块并生成到 `workers-migration/static/` 目录。
 
 ### 5. **自定义域名绑定** (可选)
 
