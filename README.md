@@ -1,8 +1,8 @@
-# Cloudflare R2 大文件管理系统
+# Cloudflare Worker Storage 文件管理系统
 
 ## 📋 项目概述
 
-这是一个基于 **Cloudflare Workers + Static Assets** 的大文件管理系统，专门为处理大文件（GB级）设计，支持内存优化的流式下载、分块处理和断点续传。
+这是一个基于 **Cloudflare Workers + Static Assets** 的大文件管理系统，专门为处理文件下载设计，支持内存优化的流式下载、分块处理和断点续传。
 
 ## 🏗️ 系统架构
 
@@ -101,6 +101,76 @@ cloudflareR2/
 ├── package.json               # 根项目依赖配置
 └── README.md                  # 📖 项目完整文档
 ```
+## 🚀 部署指南
+
+### 1. **环境准备**
+
+```bash
+# 安装 Wrangler CLI
+npm install -g wrangler
+
+# 登录 Cloudflare
+wrangler login
+```
+
+### 2. **项目初始化**
+
+```bash
+# 克隆或下载项目代码
+git clone <repository-url>
+cd cloudflareR2
+
+# 初始化项目 (创建基础目录结构)
+node setup.js
+
+# 安装本地开发依赖 (可选，用于文件上传)
+npm install
+```
+
+### 3. **Workers项目部署**
+
+```bash
+# 进入 Worker 项目目录
+cd workers-migration
+
+# 安装 Worker 依赖
+npm install
+
+# 开发模式 (本地测试)
+npm run dev
+
+# 部署到生产环境
+npm run deploy
+
+# 查看实时日志
+npm run tail
+```
+
+### 4. **文件上传准备**
+
+如果需要上传新文件，使用本地开发服务器：
+
+```bash
+# 返回根目录
+cd ..
+
+# 启动本地文件上传服务器 (端口3000)
+npm start
+
+# 或开发模式
+npm run dev
+```
+
+访问 `http://localhost:3000` 上传和管理文件，文件会自动分块并生成到 `workers-migration/static/` 目录。
+
+### 5. **自定义域名绑定** (可选)
+
+通过 Cloudflare Dashboard 绑定自定义域名：
+1. 登录 Cloudflare Dashboard
+2. 选择你的 Worker 项目
+3. 进入 Settings > Triggers
+4. 添加自定义域名
+5. 系统会自动适配任何绑定的域名
 
 ## ✨ 核心功能特性
 
@@ -112,8 +182,6 @@ cloudflareR2/
 - **智能警告系统**: 直接下载和复制链接时提醒用户内存限制风险
 
 ### 🔄 **智能下载策略**
-- **自动检测**: 文件 > 500MB 自动重定向到专用下载页面
-- **直接下载**: 小文件直接流式下载，支持Range请求
 - **分块下载**: 大文件并发分块下载+浏览器本地合并
 - **断点续传**: 完整的Range请求支持，兼容专业下载工具
 - **用户选择**: 提供三种下载方式供用户选择
@@ -320,76 +388,6 @@ class LargeFileDownloader {
 }
 ```
 
-## 🚀 部署指南
-
-### 1. **环境准备**
-
-```bash
-# 安装 Wrangler CLI
-npm install -g wrangler
-
-# 登录 Cloudflare
-wrangler login
-```
-
-### 2. **项目初始化**
-
-```bash
-# 克隆或下载项目代码
-git clone <repository-url>
-cd cloudflareR2
-
-# 初始化项目 (创建基础目录结构)
-node setup.js
-
-# 安装本地开发依赖 (可选，用于文件上传)
-npm install
-```
-
-### 3. **Workers项目部署**
-
-```bash
-# 进入 Worker 项目目录
-cd workers-migration
-
-# 安装 Worker 依赖
-npm install
-
-# 开发模式 (本地测试)
-npm run dev
-
-# 部署到生产环境
-npm run deploy
-
-# 查看实时日志
-npm run tail
-```
-
-### 4. **文件上传准备**
-
-如果需要上传新文件，使用本地开发服务器：
-
-```bash
-# 返回根目录
-cd ..
-
-# 启动本地文件上传服务器 (端口3000)
-npm start
-
-# 或开发模式
-npm run dev
-```
-
-访问 `http://localhost:3000` 上传和管理文件，文件会自动分块并生成到 `workers-migration/static/` 目录。
-
-### 5. **自定义域名绑定** (可选)
-
-通过 Cloudflare Dashboard 绑定自定义域名：
-1. 登录 Cloudflare Dashboard
-2. 选择你的 Worker 项目
-3. 进入 Settings > Triggers
-4. 添加自定义域名
-5. 系统会自动适配任何绑定的域名
 
 ## 📊 API 文档
 
